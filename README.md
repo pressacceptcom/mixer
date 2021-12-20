@@ -1,3 +1,4 @@
 # Mixer
 
-Implements mixin functionality for GDScript, in GDScript, for Godot 
+Implements mixin functionality for GDScript, in GDScript, for Godot
+
