@@ -30,8 +30,15 @@ signal mixed_signal1()
 var mixed_property1: String = ''
 var nonmixed_property1: String = ''
 
+var _self: Object
 
-func mixed_method1(_self, an_argument: String = 'default argument') -> void:
+func _init(
+		init_self: Object) -> void:
+
+	_self = init_self
+
+
+func mixed_method1(an_argument: String = 'default argument') -> void:
 	nonmixed_property1 = an_argument
 
 

@@ -15,15 +15,22 @@ static func __mixable_info() -> PressAccept_Mixer_Mixin:
 	return mixin_info
 
 
-signal mixed_signal2(arg1)
+signal mixed_signal2(arg1, emitter)
 
 
 var mixed_property2: String = ''
 var nonmixed_property2: String = ''
 
+var _self: Object
 
-func mixed_method2(_self, an_argument: String) -> void:
-	emit_signal('mixed_signal2', 5);
+func _init(
+		init_self: Object) -> void:
+
+	_self = init_self
+
+
+func mixed_method2(an_argument: String) -> void:
+	emit_signal('mixed_signal2', 5, _self);
 
 
 func nonmixed_method2() -> void:

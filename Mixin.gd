@@ -367,16 +367,17 @@ func generate_properties() -> String:
 #
 func generate_init(
 		use_instantiate: bool = false,
-		is_tool: bool = true) -> String:
+		is_tool: bool = true,
+		_self: String = 'self') -> String:
 
 	var source_code: String = ''
 
 	source_code += "\n\t" + identifier + ' = '
 	if not use_instantiate:
-		source_code += "load('" + _mixin_script + "').new()"
+		source_code += "load('" + _mixin_script + "').new(" + _self + ')'
 	else:
 		source_code += "PressAccept_Mixer_Mixer.instantiate('"
-		source_code += _mixin_script + "', [], "
+		source_code += _mixin_script + "', [" + _self + '], '
 		source_code += ('true' if is_tool else 'false') + ')' 
 
 	source_code += "\n"
@@ -452,8 +453,6 @@ func generate_methods() -> String:
 	# on the self parameter appropriately
 	for method in _methods:
 		method = _methods[method]
-		if not method.has('mixin') or not method['mixin']:
-			method.args.pop_front()
 
 		source_code += "\nfunc " + method['name'] + "("
 
@@ -498,8 +497,6 @@ func generate_methods() -> String:
 
 		source_code = source_code.trim_suffix(', ')
 		source_code += '])'
-		if not method.has('mixin') or not method['mixin']:
-			source_code += "\n\targs.push_front(self)"
 		source_code += "\n\treturn " + identifier + '.callv("' + method['name'] + '"'
 		source_code += ', args)'
 		

@@ -30,6 +30,6 @@ func _ready() -> void:
 	mixed_object.mixed_method2('mixed method 2')
 
 
-func _on_mixed_signal2(arg1) -> void:
-	print('Signal fired!' + str(arg1))
+func _on_mixed_signal2(arg1, emitter) -> void:
+	print('Signal fired!' + str(arg1) + str(emitter))
 

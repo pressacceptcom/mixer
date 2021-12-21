@@ -56,6 +56,8 @@ class_name PressAccept_Mixer_Mixer
 # |-----------|
 #
 # 1.0.0    12/20/2021    First Release
+# 2.0.0    12/21/2021    Opted to pass self into _init to be stored as property
+#                            rather than pass self to each mixin method
 #
 
 # *************
@@ -99,7 +101,7 @@ static func is_mixable(
 	if not type is Script or not type.resource_path:
 		return false
 
-	if PressAccept_Typer_Typer.script_has_method(type, STR_MIXABLE_INFO_METHOD):
+	if PressAccept_Typer_ObjectInfo.script_has_method(type, STR_MIXABLE_INFO_METHOD):
 		return true
 
 	return false
@@ -113,7 +115,7 @@ static func is_mixed(
 	if not type is Script or not type.resource_path:
 		return false
 
-	if PressAccept_Typer_Typer.script_has_method(type, STR_MIXED_INFO_METHOD):
+	if PressAccept_Typer_ObjectInfo.script_has_method(type, STR_MIXED_INFO_METHOD):
 		return true
 
 	return false
@@ -145,10 +147,7 @@ static func generate_script(
 		mixin = _normalize_script(mixin)
 		if mixin is Script \
 				and mixin.resource_path:
-			if PressAccept_Typer_ObjectInfo.script_has_method(
-						mixin,
-						STR_MIXABLE_INFO_METHOD
-					):
+			if is_mixable(mixin):
 				resolved_mixins[mixin.resource_path] = \
 					{
 						'info': mixin.call(STR_MIXABLE_INFO_METHOD)
@@ -157,10 +156,7 @@ static func generate_script(
 				# it's not mixable, so ignore it
 				continue
 
-			if PressAccept_Typer_ObjectInfo.script_has_method(
-						mixin,
-						STR_MIXED_INFO_METHOD
-					):
+			if is_mixed(mixin):
 				# the mixin is itself a mixed object
 				# set it to use instantiate
 				resolved_mixins[mixin.resource_path]['instantiate'] = true
@@ -223,8 +219,16 @@ static func generate_script(
 
 	for mixin in resolved_mixins:
 		mixin = resolved_mixins[mixin]
-		source_code += \
-			mixin['info'].generate_init(mixin['instantiate'], is_tool)
+		if not is_mixable(type):
+			source_code += \
+				mixin['info'].generate_init(mixin['instantiate'], is_tool)
+		else:
+			source_code += \
+				mixin['info'].generate_init(
+					mixin['instantiate'],
+					is_tool,
+					'arg0'
+				)
 
 	# generate wrapper methods
 	for mixin in resolved_mixins:
