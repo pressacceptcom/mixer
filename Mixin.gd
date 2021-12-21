@@ -15,6 +15,18 @@ class_name PressAccept_Mixer_Mixin
 # PressAccept_Mixer_Mixer uses this information and its associated code
 # generation methods (generate_*) to generate an entire script.
 #
+# Scripts that are meant to be mixins must be sure to format their mixin
+# elements correctly. This is most important currently with methods. The first
+# argument to a mixed-in method will be the composite object instance (self).
+# In the generated code, this argument is *not* included (it's added in the
+# generated code)
+#
+# One must also be careful of calling mixed-in methods, as they are called using
+# .callv, since the call silently fails if the parameters don't match. In the
+# calling process, all arguments are set to DefaultArgument by default, then
+# eliminated if they are defined (passed) using _trim_defaults(). This allows
+# default arguments to be processed correctly by the wrapping mixin script.
+#
 # |------------------|
 # | Meta Information |
 # |------------------|
@@ -55,6 +67,7 @@ class DefaultArgument:
 # | Private Static Functions |
 # ****************************
 
+
 static func _trim_defaults(
 		args: Array) -> Array:
 
@@ -82,6 +95,21 @@ var _methods      : Dictionary
 var _properties   : Dictionary
 var _signals      : Dictionary
 
+# ***************
+# | Constructor |
+# ***************
+
+
+# initialize properties, identifier will be used in the composite class
+#
+# init_mixin_script must be a path to a script file (the mixable script), as
+# its used in the generated code. It's also used to verify that any identifiers
+# added exist on the script, as well as serve for mixable-mixin differentiation.
+# Adding an identifier from a different script than the _mixin_script signals
+# that the first argument (_self) shoudld be kept and passed along (see doc)
+#
+# NOTE: init_* Dictionaries expect dictionaries whose keys are the identifiers
+#       ('names') of the referenced get_*_list() dictionaries.
 func _init(
 		init_identifier   : String,
 		init_mixin_script : String,
@@ -96,6 +124,15 @@ func _init(
 	_signals = init_signals
 
 
+# ******************
+# | Public Methods |
+# ******************
+
+
+# indicate a method from a script (default initialized script) is a mixin
+#
+# NOTE: providing a script != initialized script indicates that it is a mixable
+#       method from a mixin itself, an important distinction for arguments
 func add_method(
 		method_identifier : String,
 		script            : String = _mixin_script) -> PressAccept_Mixer_Mixin:
@@ -112,6 +149,9 @@ func add_method(
 	return self
 
 
+# add multiple methods from a source script
+#
+# this optimizes the process by only loading the script_method_info once
 func add_methods(
 		method_identifiers : Array,
 		script             : String = _mixin_script) -> PressAccept_Mixer_Mixin:
@@ -126,12 +166,14 @@ func add_methods(
 	return self
 
 
+# remove a method by identifier
 func remove_method(
 		method_identifier: String) -> bool:
 
 	return _methods.erase(method_identifier)
 
 
+# retrieve the method info dictionary by identifier
 func get_method(
 		method_identifier: String):
 
@@ -141,11 +183,13 @@ func get_method(
 	return null
 
 
+# get all method identifiers defined
 func get_method_identifiers():
 
 	return _methods.keys()
 
 
+# indicate a property from a script (default initialized script) is a mixin
 func add_property(
 		property_identifier : String,
 		script              : String = _mixin_script) -> PressAccept_Mixer_Mixin:
@@ -159,6 +203,9 @@ func add_property(
 	return self
 
 
+# add multiple properties from a source script
+#
+# this optimizes the process by only loading the script_property_info once
 func add_properties(
 		property_identifiers : Array,
 		script               : String = _mixin_script
@@ -175,12 +222,14 @@ func add_properties(
 	return self
 
 
+# remove a property by identifier
 func remove_property(
 		property_idenfitier: String) -> bool:
 
 	return _properties.erase(property_idenfitier)
 
 
+# retrieve the property info dictionary by identifier
 func get_property(
 		property_identifier: String):
 
@@ -190,11 +239,13 @@ func get_property(
 	return null
 
 
+# get all property identifiers defined
 func get_property_identifiers():
 
 	return _properties.keys()
 
 
+# indicate a signal from a script (default initialized script) is a mixin
 func add_signal(
 		signal_identifier : String,
 		script            : String = _mixin_script) -> PressAccept_Mixer_Mixin:
@@ -208,6 +259,9 @@ func add_signal(
 	return self
 
 
+# add multiple signals from a source script
+#
+# this optimizes the process by only loading the script_signal_info once
 func add_signals(
 		signal_identifiers : Array,
 		script             : String = _mixin_script) -> PressAccept_Mixer_Mixin:
@@ -222,12 +276,14 @@ func add_signals(
 	return self
 
 
+# remove a signal by identifier
 func remove_signal(
 		signal_identifier: String) -> bool:
 
 	return _signals.erase(signal_identifier)
 
 
+# retrieve the signal info dictionary by identifier
 func get_signal(
 		signal_identifier: String):
 
@@ -237,11 +293,18 @@ func get_signal(
 	return null
 
 
+# get all signal identifiers defined
 func get_signal_identifiers():
 
 	return _signals.keys()
 
 
+# this method generates the signal definitions
+#
+# example:
+#
+# signal(arg0, arg1, arg2)
+#
 func generate_signals() -> String:
 
 	var source_code: String = ''
@@ -265,6 +328,12 @@ func generate_signals() -> String:
 	return source_code
 
 
+# this method generates the property definitions
+#
+# example:
+#
+# var a_property setget _set_a_property, _get_a_property
+#
 func generate_properties() -> String:
 
 	var source_code: String = ''
@@ -282,6 +351,20 @@ func generate_properties() -> String:
 	return source_code
 
 
+# this method generates the code that would be in the _init method
+#
+# this code is used in a mixin wrapper to instantiate the mixed in script as a
+# property, identified by identifier, on the wrapper itself as well as connect
+# all mixed in signals so that the signal can be passed on
+#
+# example:
+#
+# 	identifier = load('_mixin_script').new()
+# 	identifier = PressAccept_Mixer_Mixer.instantiate('_mixin_script', [], false)
+# 		^- if the mixin is itself a mixin (use_instantiate = true)
+#
+# 	identifier.connect("signal_name", self, "_on_signal_name")
+#
 func generate_init(
 		use_instantiate: bool = false,
 		is_tool: bool = true) -> String:
@@ -309,10 +392,17 @@ func generate_init(
 	return source_code
 
 
+# this method wraps up all generated code by defining all necessary methods
+#
+# this first defines all signal methods (see generate_init), then all property
+# methods (see generate_properties) and finally all mixin methods themselves
 func generate_methods() -> String:
 
 	var source_code: String = ''
 
+	# generate necessary signal functions
+	#
+	# each function captures a signal and its args, and then re-emits
 	for _signal in _signals:
 		_signal = _signals[_signal]
 		source_code += "\nfunc _on_" + _signal['name'] + '('
@@ -343,6 +433,9 @@ func generate_methods() -> String:
 
 	source_code += "\n"
 
+	# generate necessary property functions
+	#
+	# mixed in properties will thus get set and read by their access
 	for property in _properties:
 		property = _properties[property]
 		source_code += "\nfunc _set_" + property['name'] + '('
@@ -353,6 +446,10 @@ func generate_methods() -> String:
 		source_code += "\n\treturn " + identifier + '.' + property['name']
 		source_code += "\n"
 
+	# generate all mixin methods
+	#
+	# if a mixin method is from a mixin, then we alter the arguments to pass
+	# on the self parameter appropriately
 	for method in _methods:
 		method = _methods[method]
 		if not method.has('mixin') or not method['mixin']:
