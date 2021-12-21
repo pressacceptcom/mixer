@@ -55,12 +55,16 @@ class_name PressAccept_Mixer_Mixer
 # | Changelog |
 # |-----------|
 #
+# 1.0.0    12/20/2021    First Release
+#
 
 # *************
 # | Constants |
 # *************
 
+# name of the method that gives us the info on how to mix this script
 const STR_MIXABLE_INFO_METHOD : String = '__mixable_info'
+# name of the method that gives us the info on how to composite this script
 const STR_MIXED_INFO_METHOD   : String = '__mixed_info'
 
 # ****************************
@@ -87,6 +91,7 @@ static func _normalize_script(
 # ***************************
 
 
+# tests whether we can extract mixable info from a class
 static func is_mixable(
 		type) -> bool:
 
@@ -100,6 +105,7 @@ static func is_mixable(
 	return false
 
 
+# tests whether we can extract composite info from a class
 static func is_mixed(
 		type) -> bool:
 
@@ -112,12 +118,13 @@ static func is_mixed(
 
 	return false
 
+
 # instantiate an object (possibly mixin)
 #
 # returns a string with an error message on failure
 #
 # NOTE: type can be String (resource path) or Script object
-static func instantiate(
+static func generate_script(
 		type,                     # String | Script
 		init_args : Array,
 		is_tool   : bool = true): # -> String | Object
@@ -128,9 +135,10 @@ static func instantiate(
 
 	if not PressAccept_Typer_ObjectInfo. \
 			script_has_method(type, STR_MIXED_INFO_METHOD):
-		# nothing to mix, just instantiate
-		return type.callv('new', init_args)
+		# nothing to mix, just return the original script
+		return type
 
+	# determine the mixins, and how to instantiate them
 	var mixed_info      : Array = type.call(STR_MIXED_INFO_METHOD)
 	var resolved_mixins : Dictionary = {}
 	for mixin in mixed_info:
@@ -174,18 +182,18 @@ static func instantiate(
 		else:
 			return 'Error: Duplicate Mixin Identifiers - "' \
 				+ mixin.identifier + '"'
-		for _signal in mixin.signals:
+		for _signal in mixin.get_signal_identifiers():
 			if not _signal in signals:
 				signals.push_back(_signal)
 			else:
 				return 'Error: Duplicate Signal Identifiers - "' + _signal + '"'
-		for property in mixin.properties:
+		for property in mixin.get_property_identifiers():
 			if not property in properties:
 				properties.push_back(property)
 			else:
 				return 'Error: Duplicate Property Identifiers - "' \
 					+ property + '"'
-		for method in mixin.methods:
+		for method in mixin.get_method_identifiers():
 			if not method in methods:
 				methods.push_back(method)
 			else:
@@ -198,12 +206,12 @@ static func instantiate(
 	# generate signals
 	for mixin in resolved_mixins:
 		mixin = resolved_mixins[mixin]['info']
-		source_code += mixin.get_signals()
+		source_code += mixin.generate_signals()
 
 	# generate properties
 	for mixin in resolved_mixins:
 		mixin = resolved_mixins[mixin]['info']
-		source_code += mixin.get_properties()
+		source_code += mixin.generate_properties()
 
 	# generate _init
 	source_code += "\nfunc _init("
@@ -215,14 +223,30 @@ static func instantiate(
 
 	for mixin in resolved_mixins:
 		mixin = resolved_mixins[mixin]
-		source_code += mixin['info'].get_init(mixin['instantiate'], is_tool)
+		source_code += \
+			mixin['info'].generate_init(mixin['instantiate'], is_tool)
 
+	# generate wrapper methods
 	for mixin in resolved_mixins:
 		mixin = resolved_mixins[mixin]['info']
-		source_code += mixin.get_methods()
+		source_code += mixin.generate_methods()
 
+	# instantiate our wrapper oobject
 	var generated_script = GDScript.new()
 	generated_script.source_code = source_code
 	generated_script.reload()
-	return generated_script.callv('new', init_args)
+	return generated_script
+
+
+static func instantiate(
+		type,                     # String | Script
+		init_args : Array,
+		is_tool   : bool = true): # -> String | Object
+
+	var generated_script = generate_script(type, init_args, is_tool)
+
+	if generated_script is Script:
+		return generated_script.callv('new', init_args)
+
+	return null
 
