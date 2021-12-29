@@ -54,6 +54,10 @@ class_name PressAccept_Mixer_Mixin
 # |-----------|
 #
 # 1.0.0    12/20/2021    First Release
+# 2.1.0    12/29/2021    Added dependency support
+#                        Added combine
+#                        Added mixin method support
+#                        Refined getter to support Editor
 #
 
 # ********************
@@ -80,11 +84,52 @@ static func _trim_defaults(
 	return filtered
 
 
+# ***************************
+# | Public Static Functions |
+# ***************************
+
+
+static func combine(
+		identifier   : String,
+		mixin_script : String,
+		mixin_array  : Array) -> PressAccept_Mixer_Mixin:
+
+	var Mixer: Script = PressAccept_Mixer_Mixer
+
+	var return_mixin_info: PressAccept_Mixer_Mixin = \
+		load('res://addons/PressAccept/Mixer/Mixin.gd') \
+			.new(identifier, mixin_script)
+
+	for mixin in mixin_array:
+		var _mixin_script = \
+			PressAccept_Typer_ObjectInfo.normalize_script(mixin)
+		if _mixin_script is Script and _mixin_script.resource_path \
+				and Mixer.is_mixable(_mixin_script):
+			var mixin_info = _mixin_script.call(Mixer.STR_MIXABLE_INFO_METHOD)
+
+			for method in mixin_info.get_method_identifiers():
+				return_mixin_info.add_method(method, mixin)
+
+			for property in mixin_info.get_property_identifiers():
+				return_mixin_info.add_property(property, mixin)
+
+			for _signal in mixin_info.get_signal_identifiers():
+				return_mixin_info.add_signal(_signal, mixin)
+
+			for requirement in mixin_info.requires:
+				if not requirement in mixin_array \
+						and not requirement in return_mixin_info.requires:
+					return_mixin_info.add_dependency(requirement)
+
+	return return_mixin_info
+
+
 # *********************
 # | Public Properties |
 # *********************
 
-var identifier   : String
+var identifier : String
+var requires   : Array 
 
 # **********************
 # | Private Properties |
@@ -118,6 +163,7 @@ func _init(
 		init_signals      : Dictionary = {}) -> void:
 
 	identifier = init_identifier
+	requires = []
 	_mixin_script = init_mixin_script
 	_methods = init_methods
 	_properties = init_properties
@@ -127,6 +173,26 @@ func _init(
 # ******************
 # | Public Methods |
 # ******************
+
+
+func add_dependency(
+		script: String) -> void:
+
+	if not script in requires:
+		requires.push_back(script)
+
+
+func add_dependencies(
+		scripts: Array) -> void:
+
+	for script in scripts:
+		add_dependency(script)
+
+
+func remove_dependency(
+		script: String) -> void:
+
+	requires.erase(script)
 
 
 # indicate a method from a script (default initialized script) is a mixin
@@ -162,6 +228,9 @@ func add_methods(
 	for method_identifier in method_identifiers:
 		if method_identifier in script_methods:
 			_methods[method_identifier] = script_methods[method_identifier]
+
+		if script != _mixin_script:
+			_methods[method_identifier]['mixin'] = true
 
 	return self
 
@@ -444,7 +513,9 @@ func generate_methods() -> String:
 		source_code += "\n\t" + identifier + '.' + property['name'] + ' = '
 		source_code += 'new_' + property['name']
 		source_code += "\n\nfunc _get_" + property['name'] + '():'
-		source_code += "\n\treturn " + identifier + '.' + property['name']
+		source_code += "\n\tif " + identifier + ":\n"
+		source_code += "\n\t\treturn " + identifier + '.' + property['name']
+		source_code += "\n\treturn null"
 		source_code += "\n"
 
 	# generate all mixin methods

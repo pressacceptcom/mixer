@@ -58,7 +58,11 @@ class_name PressAccept_Mixer_Mixer
 # 1.0.0    12/20/2021    First Release
 # 2.0.0    12/21/2021    Opted to pass self into _init to be stored as property
 #                            rather than pass self to each mixin method
-#
+# 2.1.0    12/29/2021    Removed _normalize_script, use ObjectInfo.normalize_script
+#                        Added support for dependencies
+#                        Added support for method overriding
+#                        Added Script Cache (DICT Constant)
+#                        Added support for __init and default _init arguments
 
 # *************
 # | Constants |
@@ -69,24 +73,7 @@ const STR_MIXABLE_INFO_METHOD : String = '__mixable_info'
 # name of the method that gives us the info on how to composite this script
 const STR_MIXED_INFO_METHOD   : String = '__mixed_info'
 
-# ****************************
-# | Private Static Functions |
-# ****************************
-
-
-# normalize a given input (path name) to a Script resource object
-static func _normalize_script(
-		script) -> Script:
-
-	if script is String:
-		if script.begins_with('res://'):
-			return load(script) as Script
-
-	if not script is Script:
-		return null
-
-	return script
-
+const DICT_SCRIPT_CACHE       : Dictionary = {}
 
 # ***************************
 # | Public Static Functions |
@@ -97,28 +84,16 @@ static func _normalize_script(
 static func is_mixable(
 		type) -> bool:
 
-	type = _normalize_script(type)
-	if not type is Script or not type.resource_path:
-		return false
-
-	if PressAccept_Typer_ObjectInfo.script_has_method(type, STR_MIXABLE_INFO_METHOD):
-		return true
-
-	return false
+	return PressAccept_Typer_ObjectInfo	\
+		.script_has_method(type, STR_MIXABLE_INFO_METHOD)
 
 
 # tests whether we can extract composite info from a class
 static func is_mixed(
 		type) -> bool:
 
-	type = _normalize_script(type)
-	if not type is Script or not type.resource_path:
-		return false
-
-	if PressAccept_Typer_ObjectInfo.script_has_method(type, STR_MIXED_INFO_METHOD):
-		return true
-
-	return false
+	return PressAccept_Typer_ObjectInfo \
+		.script_has_method(type, STR_MIXED_INFO_METHOD)
 
 
 # instantiate an object (possibly mixin)
@@ -128,48 +103,67 @@ static func is_mixed(
 # NOTE: type can be String (resource path) or Script object
 static func generate_script(
 		type,                     # String | Script
-		init_args : Array,
 		is_tool   : bool = true): # -> String | Object
 
-	type = _normalize_script(type)
-	if not type is Script or not type.resource_path:
-		return null
+	type = PressAccept_Typer_ObjectInfo.normalize_script(type)
 
 	if not PressAccept_Typer_ObjectInfo. \
-			script_has_method(type, STR_MIXED_INFO_METHOD):
-		# nothing to mix, just return the original script
+				script_has_method(type, STR_MIXED_INFO_METHOD) \
+			or not type.resource_path:
+		# nothing to/can mix, just return the original script
 		return type
+
+	if type.resource_path in DICT_SCRIPT_CACHE:
+		return DICT_SCRIPT_CACHE[type.resource_path]
 
 	# determine the mixins, and how to instantiate them
 	var mixed_info      : Array = type.call(STR_MIXED_INFO_METHOD)
 	var resolved_mixins : Dictionary = {}
-	for mixin in mixed_info:
-		mixin = _normalize_script(mixin)
-		if mixin is Script \
-				and mixin.resource_path:
-			if is_mixable(mixin):
-				resolved_mixins[mixin.resource_path] = \
-					{
-						'info': mixin.call(STR_MIXABLE_INFO_METHOD)
-					}
-			else:
-				# it's not mixable, so ignore it
-				continue
 
-			if is_mixed(mixin):
-				# the mixin is itself a mixed object
-				# set it to use instantiate
-				resolved_mixins[mixin.resource_path]['instantiate'] = true
-			else:
-				resolved_mixins[mixin.resource_path]['instantiate'] = false
+	var additions: Array = mixed_info
+	while mixed_info:
+		var next_additions: Array = []
+		for mixin in mixed_info:
+			mixin = PressAccept_Typer_ObjectInfo.normalize_script(mixin)
+			if mixin is Script and mixin.resource_path:
+				if is_mixable(mixin):
+					resolved_mixins[mixin.resource_path] = \
+						{
+							'info': mixin.call(STR_MIXABLE_INFO_METHOD)
+						}
+					if PressAccept_Typer_ObjectInfo.object_has_property(
+								resolved_mixins[mixin.resource_path]['info'],
+								'requires'
+							):
+						var requirements: Array = \
+							resolved_mixins[mixin \
+								.resource_path]['info'].requires
+						if requirements:
+							for requirement in requirements:
+								if not requirement in additions:
+									additions.push_back(requirement)
+									next_additions.push_back(requirement)
+				else:
+					# it's not mixable, so ignore it
+					continue
+
+				if is_mixed(mixin):
+					# the mixin is itself a mixed object
+					# set it to use instantiate
+					resolved_mixins[mixin.resource_path]['instantiate'] = true
+				else:
+					resolved_mixins[mixin.resource_path]['instantiate'] = false
+		mixed_info = next_additions
 
 	# check if identifiers are unique
-	var identifiers : Array = []
-	var signals     : Array = \
+	var identifiers  : Array = []
+	var signals      : Array = \
 		PressAccept_Typer_ObjectInfo.script_signal_info(type).keys()
-	var properties  : Array = \
+	var properties   : Array = \
 		PressAccept_Typer_ObjectInfo.script_property_info(type).keys()
-	var methods     : Array = \
+	var type_methods : Array = \
+		PressAccept_Typer_ObjectInfo.script_method_info(type).keys()
+	var methods      : Array = \
 		PressAccept_Typer_ObjectInfo.script_method_info(type).keys()
 	for mixin in resolved_mixins:
 		mixin = resolved_mixins[mixin]['info']
@@ -193,7 +187,11 @@ static func generate_script(
 			if not method in methods:
 				methods.push_back(method)
 			else:
-				return 'Error: Duplicate Method Identifiers - "' + method + '"'
+				if method in type_methods:
+					mixin.remove_method(method) # we're overriding this method
+				else:
+					return \
+						'Error: Duplicate Method Identifiers - "' + method + '"'
 
 	# begin generating source code
 	var source_code: String = "tool\n" if is_tool else ''
@@ -211,11 +209,41 @@ static func generate_script(
 
 	# generate _init
 	source_code += "\nfunc _init("
-	var args: String = ''
-	for arg in range(init_args.size()):
-		args += 'arg' + str(arg) + ', '
-	args = args.trim_suffix(', ')
-	source_code += args + ').(' + args + ") -> void:\n"
+	var __init_args   : String = ''
+	var num_init_args : int = 0
+	if not is_mixable(type):
+		if PressAccept_Typer_ObjectInfo.script_has_method(type, '__init'):
+			var __init: Dictionary = \
+				PressAccept_Typer_ObjectInfo.script_method_info(type)['__init']
+			num_init_args = \
+				__init['args'].size() + __init['default_args'].size()
+			for arg in range(num_init_args):
+				__init_args += 'arg' + str(arg) \
+					+ ' = PressAccept_Mixer_Mixin.DefaultArgument, '
+			__init_args = __init_args.trim_suffix(', ')
+		else:
+			var _init: Dictionary = \
+				PressAccept_Typer_ObjectInfo.script_method_info(type)['_init']
+			var _num_args: int = \
+				_init['args'].size() + _init['default_args'].size()
+			__init_args = ''
+			for arg in range(_num_args):
+				__init_args += 'arg' + str(arg) + ', '
+			__init_args = __init_args.trim_suffix(', ')
+		source_code += __init_args + ')'
+		if PressAccept_Typer_ObjectInfo.script_has_method(type, '_init'):
+			var _init: Dictionary = \
+				PressAccept_Typer_ObjectInfo.script_method_info(type)['_init']
+			var _num_args: int = \
+				_init['args'].size() + _init['default_args'].size()
+			var _init_args: String = ''
+			for arg in range(_num_args):
+				_init_args += 'arg' + str(arg) + ', '
+			_init_args = _init_args.trim_suffix(', ')
+			source_code += '.(' + _init_args + ')'
+		source_code += " -> void:\n"
+	else:
+		source_code += "arg0).(arg0) -> void:\n"
 
 	for mixin in resolved_mixins:
 		mixin = resolved_mixins[mixin]
@@ -230,6 +258,17 @@ static func generate_script(
 					'arg0'
 				)
 
+	if num_init_args:
+		source_code += "\n\tif has_method('__init'):"
+		source_code += "\n\t\tvar args: Array = " \
+			+ 'PressAccept_Mixer_Mixin._trim_defaults(['
+		var args: String = ''
+		for arg in range(num_init_args):
+			args += 'arg' + str(arg) + ', '
+		args = args.trim_suffix(', ')
+		source_code += args + "])\n"
+		source_code += "\n\t\tself.callv('__init', args)\n"
+
 	# generate wrapper methods
 	for mixin in resolved_mixins:
 		mixin = resolved_mixins[mixin]['info']
@@ -239,6 +278,10 @@ static func generate_script(
 	var generated_script = GDScript.new()
 	generated_script.source_code = source_code
 	generated_script.reload()
+
+	# store in cache
+	DICT_SCRIPT_CACHE[type.resource_path] = generated_script
+
 	return generated_script
 
 
@@ -247,7 +290,7 @@ static func instantiate(
 		init_args : Array,
 		is_tool   : bool = true): # -> String | Object
 
-	var generated_script = generate_script(type, init_args, is_tool)
+	var generated_script = generate_script(type, is_tool)
 
 	if generated_script is Script:
 		return generated_script.callv('new', init_args)
