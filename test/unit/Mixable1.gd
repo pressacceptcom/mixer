@@ -3,6 +3,7 @@ tool
 static func __mixed_info() -> Array:
 	return [ 'res://addons/PressAccept/Mixer/test/unit/Mixable2.gd' ]
 
+
 static func __mixable_info() -> PressAccept_Mixer_Mixin:
 
 	var mixin_info: PressAccept_Mixer_Mixin = \
@@ -25,6 +26,7 @@ static func __mixable_info() -> PressAccept_Mixer_Mixin:
 
 
 signal mixed_signal1()
+signal nonmixed_signal1( argument, emitter )
 
 
 var mixed_property1: String = ''
@@ -42,6 +44,8 @@ func mixed_method1(an_argument: String = 'default argument') -> void:
 	nonmixed_property1 = an_argument
 
 
-func nonmixed_method1() -> void:
+func nonmixed_method1(
+		an_argument,
+		another_argument: String = 'default_argument') -> void:
 	nonmixed_property1 = ''
 

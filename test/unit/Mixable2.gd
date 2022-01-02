@@ -1,18 +1,15 @@
 tool
 
+
 static func __mixable_info() -> PressAccept_Mixer_Mixin:
 
-	var mixin_info: PressAccept_Mixer_Mixin = \
-		PressAccept_Mixer_Mixin.new(
-			'mixable2',
-			'res://addons/PressAccept/Mixer/test/unit/Mixable2.gd'
-		)
-
-	mixin_info.add_signal('mixed_signal2') \
-		.add_property('mixed_property2') \
-		.add_method('mixed_method2')
-
-	return mixin_info
+	return PressAccept_Mixer_Mixin.new(
+		'mixable2',
+		'res://addons/PressAccept/Mixer/test/unit/Mixable2.gd',
+		[ 'mixed_method2' ],
+		[ 'mixed_property2' ],
+		[ 'mixed_signal2' ]
+	)
 
 
 signal mixed_signal2(arg1, emitter)
@@ -34,5 +31,5 @@ func mixed_method2(an_argument: String) -> void:
 
 
 func nonmixed_method2() -> void:
-	nonmixed_property2 = ''
+	nonmixed_property2 = 'set_value'
 
