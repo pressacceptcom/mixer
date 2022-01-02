@@ -53,11 +53,14 @@ class_name PressAccept_Mixer_Mixin
 # | Changelog |
 # |-----------|
 #
-# 1.0.0    12/20/2021    First Release
-# 2.1.0    12/29/2021    Added dependency support
+# 0.0.0    12/20/2021    First Release
+# 0.1.0    12/29/2021    Added dependency support
 #                        Added combine
 #                        Added mixin method support
 #                        Refined getter to support Editor
+# 0.2.0    12/31/2022    Modified _init to accept arrays of identifiers
+#                        Made dependency methods fluent
+# 1.0.0    01/01/2022    First Release
 #
 
 # ********************
@@ -136,9 +139,9 @@ var requires   : Array
 # **********************
 
 var _mixin_script : String
-var _methods      : Dictionary
-var _properties   : Dictionary
-var _signals      : Dictionary
+var _methods      : Dictionary = {}
+var _properties   : Dictionary = {}
+var _signals      : Dictionary = {}
 
 # ***************
 # | Constructor |
@@ -158,16 +161,30 @@ var _signals      : Dictionary
 func _init(
 		init_identifier   : String,
 		init_mixin_script : String,
-		init_methods      : Dictionary = {},
-		init_properties   : Dictionary = {},
-		init_signals      : Dictionary = {}) -> void:
+		init_methods      : Array = [],
+		init_properties   : Array = [],
+		init_signals      : Array = [],
+		init_requires     : Array = []) -> void:
 
+	# public properties
 	identifier = init_identifier
-	requires = []
+
+	if init_requires:
+		add_dependencies(init_requires)
+	else:
+		requires = init_requires
+
+	# private properties
 	_mixin_script = init_mixin_script
-	_methods = init_methods
-	_properties = init_properties
-	_signals = init_signals
+
+	if init_methods:
+		add_methods(init_methods)
+
+	if init_properties:
+		add_properties(init_properties)
+
+	if init_signals:
+		add_signals(init_signals)
 
 
 # ******************
@@ -175,30 +192,40 @@ func _init(
 # ******************
 
 
+# if script doesn't exist as a dependency add it
 func add_dependency(
-		script: String) -> void:
+		script: String) -> PressAccept_Mixer_Mixin:
 
 	if not script in requires:
 		requires.push_back(script)
 
+	return self
 
+
+# add multiple dependencies
 func add_dependencies(
-		scripts: Array) -> void:
+		scripts: Array) -> PressAccept_Mixer_Mixin:
 
 	for script in scripts:
 		add_dependency(script)
 
+	return self
 
+
+# remove a dependency by script
 func remove_dependency(
-		script: String) -> void:
+		script: String) -> PressAccept_Mixer_Mixin:
 
 	requires.erase(script)
+
+	return self
 
 
 # indicate a method from a script (default initialized script) is a mixin
 #
 # NOTE: providing a script != initialized script indicates that it is a mixable
-#       method from a mixin itself, an important distinction for arguments
+#       method from a mixin itself, an important distinction for initialization
+#       arguments
 func add_method(
 		method_identifier : String,
 		script            : String = _mixin_script) -> PressAccept_Mixer_Mixin:
@@ -501,8 +528,6 @@ func generate_methods() -> String:
 		source_code = source_code.trim_suffix(', ')
 		source_code += ")\n"
 
-	source_code += "\n"
-
 	# generate necessary property functions
 	#
 	# mixed in properties will thus get set and read by their access
@@ -513,15 +538,11 @@ func generate_methods() -> String:
 		source_code += "\n\t" + identifier + '.' + property['name'] + ' = '
 		source_code += 'new_' + property['name']
 		source_code += "\n\nfunc _get_" + property['name'] + '():'
-		source_code += "\n\tif " + identifier + ":\n"
+		source_code += "\n\tif " + identifier + ":"
 		source_code += "\n\t\treturn " + identifier + '.' + property['name']
-		source_code += "\n\treturn null"
-		source_code += "\n"
+		source_code += "\n\treturn null\n"
 
 	# generate all mixin methods
-	#
-	# if a mixin method is from a mixin, then we alter the arguments to pass
-	# on the self parameter appropriately
 	for method in _methods:
 		method = _methods[method]
 
@@ -544,10 +565,7 @@ func generate_methods() -> String:
 			source_code += ' = PressAccept_Mixer_Mixin.DefaultArgument,'
 
 		source_code = source_code.trim_suffix(',')
-		source_code += '):'
-
-		# every mixin method should accept one arg: self
-		source_code += "\n\tvar args: Array = "
+		source_code += "):\n\tvar args: Array = "
 		source_code += 'PressAccept_Mixer_Mixin._trim_defaults(['
 
 		arg_num = 0
@@ -567,11 +585,9 @@ func generate_methods() -> String:
 			source_code += ', '
 
 		source_code = source_code.trim_suffix(', ')
-		source_code += '])'
-		source_code += "\n\treturn " + identifier + '.callv("' + method['name'] + '"'
-		source_code += ', args)'
-		
-		source_code += "\n"
+		source_code += "])\n\treturn " + identifier + '.callv("' \
+			+ method['name'] + '"'
+		source_code += ', args)\n'
 
 	return source_code
 
