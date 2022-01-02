@@ -18,7 +18,7 @@ class_name PressAccept_Mixer_Test_Utilities
 # |------------------|
 #
 # Organization Namespace : PressAccept
-# Package Namespace      : Conductable
+# Package Namespace      : Mixer
 # Class                  : Test Utilities
 #
 # Organization        : Press Accept
