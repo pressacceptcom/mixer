@@ -55,14 +55,16 @@ class_name PressAccept_Mixer_Mixer
 # | Changelog |
 # |-----------|
 #
-# 1.0.0    12/20/2021    First Release
-# 2.0.0    12/21/2021    Opted to pass self into _init to be stored as property
+# 0.0.0    12/20/2021    First Release
+# 0.1.0    12/21/2021    Opted to pass self into _init to be stored as property
 #                            rather than pass self to each mixin method
-# 2.1.0    12/29/2021    Removed _normalize_script, use ObjectInfo.normalize_script
+# 0.2.0    12/29/2021    Removed _normalize_script, use ObjectInfo.normalize_script
 #                        Added support for dependencies
 #                        Added support for method overriding
 #                        Added Script Cache (DICT Constant)
 #                        Added support for __init and default _init arguments
+# 1.0.0    01/01/2022    Improved cache support for tool and non-tool scripts
+#
 
 # *************
 # | Constants |
@@ -73,7 +75,10 @@ const STR_MIXABLE_INFO_METHOD : String = '__mixable_info'
 # name of the method that gives us the info on how to composite this script
 const STR_MIXED_INFO_METHOD   : String = '__mixed_info'
 
-const DICT_SCRIPT_CACHE       : Dictionary = {}
+const DICT_SCRIPT_CACHE       : Dictionary = {
+	false : {},
+	true  : {}
+}
 
 # ***************************
 # | Public Static Functions |
@@ -113,8 +118,8 @@ static func generate_script(
 		# nothing to/can mix, just return the original script
 		return type
 
-	if type.resource_path in DICT_SCRIPT_CACHE:
-		return DICT_SCRIPT_CACHE[type.resource_path]
+	if type.resource_path in DICT_SCRIPT_CACHE[is_tool]:
+		return DICT_SCRIPT_CACHE[is_tool][type.resource_path]
 
 	# determine the mixins, and how to instantiate them
 	var mixed_info      : Array = type.call(STR_MIXED_INFO_METHOD)
@@ -195,7 +200,7 @@ static func generate_script(
 
 	# begin generating source code
 	var source_code: String = "tool\n" if is_tool else ''
-	source_code += "extends '" + type.resource_path + "'\n\n"
+	source_code += "extends '" + type.resource_path + "'\n"
 
 	# generate signals
 	for mixin in resolved_mixins:
@@ -280,7 +285,7 @@ static func generate_script(
 	generated_script.reload()
 
 	# store in cache
-	DICT_SCRIPT_CACHE[type.resource_path] = generated_script
+	DICT_SCRIPT_CACHE[is_tool][type.resource_path] = generated_script
 
 	return generated_script
 
