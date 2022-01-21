@@ -108,9 +108,11 @@ static func is_mixed(
 # NOTE: type can be String (resource path) or Script object
 static func generate_script(
 		type,                     # String | Script
-		is_tool   : bool = true): # -> String | Object
+		is_tool   : bool = true): # -> String | Object | null
 
 	type = PressAccept_Typer_ObjectInfo.normalize_script(type)
+	if not type is Script:
+		return type
 
 	if not PressAccept_Typer_ObjectInfo. \
 				script_has_method(type, STR_MIXED_INFO_METHOD) \
@@ -263,7 +265,7 @@ static func generate_script(
 					'arg0'
 				)
 
-	if num_init_args:
+	if PressAccept_Typer_ObjectInfo.script_has_method(type, '__init'):
 		source_code += "\n\tif has_method('__init'):"
 		source_code += "\n\t\tvar args: Array = " \
 			+ 'PressAccept_Mixer_Mixin._trim_defaults(['
@@ -292,8 +294,8 @@ static func generate_script(
 
 static func instantiate(
 		type,                     # String | Script
-		init_args : Array,
-		is_tool   : bool = true): # -> String | Object
+		init_args : Array = [],
+		is_tool   : bool  = true): # -> String | Object
 
 	var generated_script = generate_script(type, is_tool)
 

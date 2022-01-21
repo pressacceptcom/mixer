@@ -111,13 +111,22 @@ static func combine(
 			var mixin_info = _mixin_script.call(Mixer.STR_MIXABLE_INFO_METHOD)
 
 			for method in mixin_info.get_method_identifiers():
-				return_mixin_info.add_method(method, mixin)
+				var actual_mixin: String = \
+					_resolve_method(method, mixin)
+				if actual_mixin:
+					return_mixin_info.add_method(method, actual_mixin)
 
 			for property in mixin_info.get_property_identifiers():
-				return_mixin_info.add_property(property, mixin)
+				var actual_mixin: String = \
+					_resolve_property(property, mixin)
+				if actual_mixin:
+					return_mixin_info.add_property(property, actual_mixin)
 
 			for _signal in mixin_info.get_signal_identifiers():
-				return_mixin_info.add_signal(_signal, mixin)
+				var actual_mixin: String = \
+					_resolve_signal(_signal, mixin)
+				if actual_mixin:
+					return_mixin_info.add_signal(_signal, actual_mixin)
 
 			for requirement in mixin_info.requires:
 				if not requirement in mixin_array \
@@ -125,6 +134,83 @@ static func combine(
 					return_mixin_info.add_dependency(requirement)
 
 	return return_mixin_info
+
+
+# ****************************
+# | Private Static Functions |
+# ****************************
+
+
+static func _resolve_method(
+		method_name: String,
+		mixin: String) -> String:
+
+	var methods: Dictionary = \
+		PressAccept_Typer_ObjectInfo.script_method_info(mixin)
+
+	var return_value = ''
+
+	if method_name in methods:
+		return_value = mixin
+	else:
+		if PressAccept_Mixer_Mixer.is_mixed(mixin):
+			var mixins: Array = \
+				load(mixin).call(PressAccept_Mixer_Mixer.STR_MIXED_INFO_METHOD)
+			
+			for a_mixin in mixins:
+				return_value = _resolve_method(method_name, a_mixin)
+				if return_value:
+					break
+
+	return return_value
+
+
+static func _resolve_property(
+		property_name: String,
+		mixin: String) -> String:
+
+	var properties: Dictionary = \
+		PressAccept_Typer_ObjectInfo.script_property_info(mixin)
+
+	var return_value = ''
+
+	if property_name in properties:
+		return_value = mixin
+	else:
+		if PressAccept_Mixer_Mixer.is_mixed(mixin):
+			var mixins: Array = \
+				load(mixin).call(PressAccept_Mixer_Mixer.STR_MIXED_INFO_METHOD)
+			
+			for a_mixin in mixins:
+				return_value = _resolve_property(property_name, a_mixin)
+				if return_value:
+					break
+
+	return return_value
+
+
+static func _resolve_signal(
+		signal_name: String,
+		mixin: String) -> String:
+
+	var signals: Dictionary = \
+		PressAccept_Typer_ObjectInfo.script_signal_info(mixin)
+
+	var return_value = ''
+
+	if signal_name in signals:
+		return_value = mixin
+	else:
+		if PressAccept_Mixer_Mixer.is_mixed(mixin):
+			var mixins: Array = \
+				load(mixin).call(PressAccept_Mixer_Mixer.STR_MIXED_INFO_METHOD)
+			
+			for a_mixin in mixins:
+				return_value = _resolve_signal(signal_name, a_mixin)
+				if return_value:
+					break
+
+	return return_value
 
 
 # *********************
@@ -236,8 +322,8 @@ func add_method(
 	if method_identifier in script_methods:
 		_methods[method_identifier] = script_methods[method_identifier]
 
-	if script != _mixin_script:
-		_methods[method_identifier]['mixin'] = true
+		if script != _mixin_script:
+			_methods[method_identifier]['mixin'] = true
 
 	return self
 
